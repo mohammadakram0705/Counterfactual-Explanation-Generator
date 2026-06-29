@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Counterfactual Explanation Generator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; padding: 24px; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 20px; }
+  .container { max-width: 960px; margin: 0 auto; }
+  .ds-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .ds-btn { padding: 7px 16px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; background: #fff; color: #555; cursor: pointer; transition: all 0.15s; }
+  .ds-btn:hover { border-color: #aaa; }
+  .ds-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; font-weight: 500; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 16px 20px; }
+  .card-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; }
+  .field { margin-bottom: 12px; }
+  .field-header { display: flex; justify-content: space-between; font-size: 13px; color: #555; margin-bottom: 5px; }
+  .field-header .val { font-weight: 600; color: #1a1a1a; }
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px; background: #e0e0e0; outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #1a1a1a; cursor: pointer; }
+  select { width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; background: #fff; color: #1a1a1a; cursor: pointer; outline: none; }
+  .pred-box { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; margin-bottom: 14px; }
+  .pred-denied { background: #fff0f0; border: 1px solid #f5c5c5; }
+  .pred-approved { background: #f0fff4; border: 1px solid #b7e4c7; }
+  .pred-icon { font-size: 24px; }
+  .pred-label { font-size: 15px; font-weight: 600; }
+  .pred-denied .pred-label { color: #c0392b; }
+  .pred-approved .pred-label { color: #1e7e34; }
+  .pred-conf { font-size: 12px; color: #888; margin-top: 2px; }
+  .metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 14px; }
+  .metric { background: #f8f8f8; border-radius: 8px; padding: 10px; text-align: center; }
+  .metric-val { font-size: 20px; font-weight: 600; color: #1a1a1a; }
+  .metric-lbl { font-size: 11px; color: #888; margin-top: 2px; }
+  .run-btn { width: 100%; padding: 11px; background: #1a1a1a; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .run-btn:hover { background: #333; }
+  .cf-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .cf-tab { padding: 5px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; background: #fff; color: #666; cursor: pointer; transition: all 0.15s; }
+  .cf-tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; font-weight: 500; }
+  .cf-result-card { border: 1px solid #e5e5e5; border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+  .cf-result-header { background: #f8f8f8; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e5e5; }
+  .cf-result-title { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .dist-badge { font-size: 11px; padding: 3px 10px; border-radius: 100px; font-weight: 500; }
+  .dist-close { background: #f0fff4; color: #1e7e34; }
+  .dist-moderate { background: #e8f0fe; color: #1a5dc8; }
+  .dist-far { background: #fff0f0; color: #c0392b; }
+  .cf-result-body { padding: 12px 14px; }
+  .cf-sub { font-size: 12px; color: #888; margin-bottom: 10px; }
+  .cf-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #f0f0f0; }
+  .cf-row:last-child { border-bottom: none; }
+  .cf-feat { color: #444; }
+  .cf-change { display: flex; align-items: center; gap: 8px; }
+  .cf-old { color: #bbb; text-decoration: line-through; font-size: 12px; }
+  .cf-arrow { color: #bbb; font-size: 11px; }
+  .cf-new { font-weight: 600; color: #1a5dc8; }
+  .insight { background: #e8f0fe; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #1a3a7a; line-height: 1.6; }
+  .empty { text-align: center; padding: 40px 20px; color: #aaa; font-size: 13px; }
+  .empty-icon { font-size: 36px; margin-bottom: 8px; }
+  .importance-section { margin-top: 14px; }
+  .imp-title { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .imp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+  .imp-label { width: 130px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .imp-bar-wrap { flex: 1; height: 6px; background: #f0f0f0; border-radius: 3px; }
+  .imp-bar { height: 6px; border-radius: 3px; background: #1a1a1a; transition: width 0.4s; }
+  .imp-val { width: 32px; text-align: right; color: #888; }
+  .free-badge { display: inline-block; background: #f0fff4; color: #1e7e34; border: 1px solid #b7e4c7; border-radius: 6px; font-size: 11px; font-weight: 600; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Counterfactual Explanation Generator <span class="free-badge">✓ No API — 100% Free</span></h1>
+  <p class="subtitle">Understand black-box ML predictions — find the minimal changes that flip the outcome</p>
+
+  <div class="ds-bar">
+    <button class="ds-btn active" onclick="setDataset('loan')">🏦 Loan Approval</button>
+    <button class="ds-btn" onclick="setDataset('churn')">📉 Customer Churn</button>
+    <button class="ds-btn" onclick="setDataset('medical')">🩺 Medical Diagnosis</button>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title">Input Features</div>
+        <div id="featureInputs"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Model Prediction</div>
+        <div id="predBox"></div>
+        <div id="metricsGrid" style="display:none"></div>
+        <div id="importanceSection"></div>
+        <button class="run-btn" id="runBtn" onclick="generateCF()">✦ Generate Counterfactuals</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Counterfactual Explanations</div>
+      <div id="cfTabs" class="cf-tabs" style="display:none"></div>
+      <div id="cfContent">
+        <div class="empty">
+          <div class="empty-icon">⇄</div>
+          Adjust features and click "Generate Counterfactuals" to see what minimal changes would flip the model's decision.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Dataset Definitions ──────────────────────────────────────────────
+const DATASETS = {
+  loan: {
+    label: 'Loan Approval',
+    negLabel: 'Denied', posLabel: 'Approved',
+    features: [
+      { id: 'income',     label: 'Annual Income ($K)', type: 'range', min: 20,  max: 200, step: 5,  value: 42,  unit: 'K'   },
+      { id: 'credit',     label: 'Credit Score',       type: 'range', min: 300, max: 850, step: 10, value: 580, unit: ''    },
+      { id: 'debt',       label: 'Debt-to-Income (%)', type: 'range', min: 0,   max: 60,  step: 1,  value: 45,  unit: '%'   },
+      { id: 'employment', label: 'Employment (years)', type: 'range', min: 0,   max: 30,  step: 1,  value: 2,   unit: ' yr' },
+      { id: 'loanamt',    label: 'Loan Amount ($K)',   type: 'range', min: 5,   max: 500, step: 5,  value: 180, unit: 'K'   }
+    ],
+    score(v) {
+      return (v.income-20)/180*0.25 + (v.credit-300)/550*0.35 + (1-v.debt/60)*0.20 + v.employment/30*0.10 + (1-v.loanamt/500)*0.10;
+    },
+    cfRules: [
+      {
+        label: 'Path 1: Boost Credit Score',
+        condition: v => v.credit < 700,
+        generate(v, targetPositive) {
+          const newCredit = targetPositive ? Math.min(v.credit + 120, 850) : Math.max(v.credit - 120, 300);
+          return {
+            changes: [{ feature: 'Credit Score', from: v.credit+'', to: newCredit+'', direction: targetPositive?'increase':'decrease' }],
+            distance: Math.abs(newCredit - v.credit) < 80 ? 'close' : 'moderate',
+            insight: `Credit score is the strongest predictor. ${targetPositive ? 'Raising' : 'Lowering'} it to ${newCredit} directly shifts the model decision.`
+          };
+        }
+      },
+      {
+        label: 'Path 2: Reduce Debt & Increase Income',
+        generate(v, targetPositive) {
+          const newDebt = targetPositive ? Math.max(v.debt - 15, 0) : Math.min(v.debt + 15, 60);
+          const newIncome = targetPositive ? Math.min(v.income + 20, 200) : Math.max(v.income - 20, 20);
+          return {
+            changes: [
+              { feature: 'Debt-to-Income (%)', from: v.debt+'%', to: newDebt+'%', direction: targetPositive?'decrease':'increase' },
+              { feature: 'Annual Income ($K)', from: v.income+'K', to: newIncome+'K', direction: targetPositive?'increase':'decrease' }
+            ],
+            distance: 'moderate',
+            insight: `Improving both income and debt ratio together pushes the risk score past the decision boundary.`
+          };
+        }
+      },
+      {
+        label: 'Path 3: Reduce Loan Amount & Build Employment',
+        generate(v, targetPositive) {
+          const newLoan = targetPositive ? Math.max(v.loanamt - 50, 5) : Math.min(v.loanamt + 50, 500);
+          const newEmp  = targetPositive ? Math.min(v.employment + 3, 30) : Math.max(v.employment - 2, 0);
+          return {
+            changes: [
+              { feature: 'Loan Amount ($K)', from: v.loanamt+'K', to: newLoan+'K', direction: targetPositive?'decrease':'increase' },
+              { feature: 'Employment (years)', from: v.employment+' yr', to: newEmp+' yr', direction: targetPositive?'increase':'decrease' }
+            ],
+            distance: 'far',
+            insight: `A smaller loan request combined with longer employment history makes the application significantly less risky.`
+          };
+        }
+      }
+    ]
+  },
+
+  churn: {
+    label: 'Customer Churn',
+    negLabel: 'Will Churn', posLabel: 'Will Retain',
+    features: [
+      { id: 'tenure',    label: 'Tenure (months)',     type: 'range',  min: 1,  max: 72,  step: 1, value: 3,  unit: ' mo' },
+      { id: 'charges',   label: 'Monthly Charges ($)', type: 'range',  min: 20, max: 120, step: 1, value: 89, unit: ''   },
+      { id: 'contracts', label: 'Contract Type',       type: 'select', options: ['Month-to-month','One year','Two year'], value: 0 },
+      { id: 'support',   label: 'Support Calls/mo',    type: 'range',  min: 0,  max: 10,  step: 1, value: 4,  unit: ''   },
+      { id: 'services',  label: 'Services Count',      type: 'range',  min: 1,  max: 8,   step: 1, value: 2,  unit: ''   }
+    ],
+    score(v) {
+      return v.tenure/72*0.35 + (1-(v.charges-20)/100)*0.20 + v.contracts/2*0.25 + (1-v.support/10)*0.10 + v.services/8*0.10;
+    },
+    cfRules: [
+      {
+        label: 'Path 1: Upgrade Contract',
+        generate(v, targetPositive) {
+          const newContract = targetPositive ? Math.min(v.contracts+1, 2) : 0;
+          const opts = ['Month-to-month','One year','Two year'];
+          return {
+            changes: [{ feature: 'Contract Type', from: opts[v.contracts], to: opts[newContract], direction: 'change' }],
+            distance: 'close',
+            insight: `Contract type has the second highest weight. Switching to a longer contract drastically reduces churn probability.`
+          };
+        }
+      },
+      {
+        label: 'Path 2: Increase Tenure & Add Services',
+        generate(v, targetPositive) {
+          const newTenure   = targetPositive ? Math.min(v.tenure + 18, 72) : Math.max(v.tenure - 10, 1);
+          const newServices = targetPositive ? Math.min(v.services + 2, 8) : Math.max(v.services - 2, 1);
+          return {
+            changes: [
+              { feature: 'Tenure (months)', from: v.tenure+' mo', to: newTenure+' mo', direction: targetPositive?'increase':'decrease' },
+              { feature: 'Services Count',  from: v.services+'',  to: newServices+'',  direction: targetPositive?'increase':'decrease' }
+            ],
+            distance: 'moderate',
+            insight: `Longer tenure signals loyalty and more services create switching costs, both reducing churn risk.`
+          };
+        }
+      },
+      {
+        label: 'Path 3: Reduce Charges & Support Calls',
+        generate(v, targetPositive) {
+          const newCharges = targetPositive ? Math.max(v.charges - 25, 20) : Math.min(v.charges + 25, 120);
+          const newSupport = targetPositive ? Math.max(v.support - 2, 0)   : Math.min(v.support + 3, 10);
+          return {
+            changes: [
+              { feature: 'Monthly Charges ($)', from: '$'+v.charges, to: '$'+newCharges, direction: targetPositive?'decrease':'increase' },
+              { feature: 'Support Calls/mo',    from: v.support+'',  to: newSupport+'',  direction: targetPositive?'decrease':'increase' }
+            ],
+            distance: 'moderate',
+            insight: `Lower charges reduce bill-shock churn, while fewer support calls indicate a smoother customer experience.`
+          };
+        }
+      }
+    ]
+  },
+
+  medical: {
+    label: 'Diabetes Risk',
+    negLabel: 'High Risk', posLabel: 'Low Risk',
+    features: [
+      { id: 'glucose',  label: 'Glucose (mg/dL)',   type: 'range', min: 70,  max: 200, step: 1,   value: 148, unit: ''      },
+      { id: 'bmi',      label: 'BMI',               type: 'range', min: 18,  max: 50,  step: 0.5, value: 33,  unit: ''      },
+      { id: 'age',      label: 'Age',               type: 'range', min: 18,  max: 80,  step: 1,   value: 52,  unit: ' yr'   },
+      { id: 'bp',       label: 'Blood Pressure',    type: 'range', min: 60,  max: 140, step: 1,   value: 88,  unit: ' mmHg' },
+      { id: 'insulin',  label: 'Insulin (μU/mL)',   type: 'range', min: 0,   max: 300, step: 5,   value: 180, unit: ''      }
+    ],
+    score(v) {
+      return (1-(v.glucose-70)/130)*0.30 + (1-(v.bmi-18)/32)*0.20 + (1-(v.age-18)/62)*0.15 + (1-(v.bp-60)/80)*0.20 + (1-v.insulin/300)*0.15;
+    },
+    cfRules: [
+      {
+        label: 'Path 1: Lower Glucose Level',
+        generate(v, targetPositive) {
+          const newGlucose = targetPositive ? Math.max(v.glucose - 35, 70) : Math.min(v.glucose + 35, 200);
+          return {
+            changes: [{ feature: 'Glucose (mg/dL)', from: v.glucose+'', to: newGlucose+'', direction: targetPositive?'decrease':'increase' }],
+            distance: Math.abs(newGlucose - v.glucose) < 25 ? 'close' : 'moderate',
+            insight: `Glucose level carries the highest weight (30%). ${targetPositive ? 'Reducing' : 'Raising'} it to ${newGlucose} mg/dL crosses the risk threshold.`
+          };
+        }
+      },
+      {
+        label: 'Path 2: Reduce BMI & Blood Pressure',
+        generate(v, targetPositive) {
+          const newBMI = targetPositive ? Math.max(v.bmi - 5, 18) : Math.min(v.bmi + 5, 50);
+          const newBP  = targetPositive ? Math.max(v.bp - 15, 60) : Math.min(v.bp + 15, 140);
+          return {
+            changes: [
+              { feature: 'BMI',            from: v.bmi+'',      to: newBMI+'',  direction: targetPositive?'decrease':'increase' },
+              { feature: 'Blood Pressure', from: v.bp+' mmHg',  to: newBP+' mmHg', direction: targetPositive?'decrease':'increase' }
+            ],
+            distance: 'moderate',
+            insight: `BMI and blood pressure together account for 40% of the model score. Improving both significantly lowers diabetes risk.`
+          };
+        }
+      },
+      {
+        label: 'Path 3: Normalize Insulin & Lower Glucose',
+        generate(v, targetPositive) {
+          const newInsulin = targetPositive ? Math.max(v.insulin - 80, 0) : Math.min(v.insulin + 80, 300);
+          const newGlucose = targetPositive ? Math.max(v.glucose - 20, 70) : Math.min(v.glucose + 20, 200);
+          return {
+            changes: [
+              { feature: 'Insulin (μU/mL)', from: v.insulin+'',  to: newInsulin+'', direction: targetPositive?'decrease':'increase' },
+              { feature: 'Glucose (mg/dL)', from: v.glucose+'',  to: newGlucose+'', direction: targetPositive?'decrease':'increase' }
+            ],
+            distance: 'far',
+            insight: `High insulin resistance combined with elevated glucose is a strong risk signal. Normalizing both features together flips the prediction.`
+          };
+        }
+      }
+    ]
+  }
+};
+
+// ─── State ────────────────────────────────────────────────────────────
+let currentDs = 'loan';
+let vals = {};
+let cfResults = [];
+let activeTab = 0;
+
+// ─── Dataset Switch ───────────────────────────────────────────────────
+function setDataset(ds) {
+  currentDs = ds;
+  document.querySelectorAll('.ds-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  cfResults = [];
+  document.getElementById('cfTabs').style.display = 'none';
+  document.getElementById('metricsGrid').style.display = 'none';
+  document.getElementById('importanceSection').innerHTML = '';
+  document.getElementById('cfContent').innerHTML = emptyState();
+  renderFeatures();
+  updatePrediction();
+}
+
+// ─── Render Features ──────────────────────────────────────────────────
+function renderFeatures() {
+  const ds = DATASETS[currentDs];
+  vals = {};
+  let html = '';
+  ds.features.forEach(f => {
+    vals[f.id] = f.value;
+    if (f.type === 'range') {
+      html += `<div class="field">
+        <div class="field-header">
+          <span>${f.label}</span>
+          <span class="val" id="val_${f.id}">${f.value}${f.unit}</span>
+        </div>
+        <input type="range" min="${f.min}" max="${f.max}" step="${f.step}" value="${f.value}"
+          oninput="updateVal('${f.id}','${f.unit}',this.value)" />
+      </div>`;
+    } else {
+      html += `<div class="field">
+        <div class="field-header"><span>${f.label}</span></div>
+        <select onchange="updateSelect('${f.id}',this.value)">
+          ${f.options.map((o,i)=>`<option value="${i}"${i===f.value?' selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>`;
+    }
+  });
+  document.getElementById('featureInputs').innerHTML = html;
+}
+
+function updateVal(id, unit, v) {
+  vals[id] = parseFloat(v);
+  document.getElementById('val_'+id).textContent = parseFloat(v) + unit;
+  updatePrediction();
+}
+function updateSelect(id, v) {
+  vals[id] = parseInt(v);
+  updatePrediction();
+}
+
+// ─── Prediction ───────────────────────────────────────────────────────
+function getPrediction() {
+  const s = Math.min(Math.max(DATASETS[currentDs].score(vals), 0.05), 0.95);
+  return { score: s, positive: s >= 0.5, conf: Math.round(s >= 0.5 ? s*100 : (1-s)*100) };
+}
+
+function updatePrediction() {
+  const { positive, conf } = getPrediction();
+  const ds = DATASETS[currentDs];
+  const label = positive ? ds.posLabel : ds.negLabel;
+  const icon  = positive ? '✓' : '✗';
+  const cls   = positive ? 'pred-approved' : 'pred-denied';
+  document.getElementById('predBox').innerHTML = `
+    <div class="pred-box ${cls}">
+      <div class="pred-icon">${icon}</div>
+      <div>
+        <div class="pred-label">${label}</div>
+        <div class="pred-conf">Confidence: ${conf}%</div>
+      </div>
+    </div>`;
+}
+
+// ─── Feature Importance ───────────────────────────────────────────────
+function computeImportance() {
+  const ds = DATASETS[currentDs];
+  const importances = ds.features.map(f => {
+    const delta = f.type === 'range' ? (f.max - f.min) * 0.1 : 1;
+    const vH = { ...vals, [f.id]: Math.min((vals[f.id]||0)+delta, f.max||2) };
+    const vL = { ...vals, [f.id]: Math.max((vals[f.id]||0)-delta, f.min||0) };
+    const sens = Math.abs(ds.score(vH) - ds.score(vL));
+    return { label: f.label, sens };
+  });
+  const max = Math.max(...importances.map(i => i.sens)) || 1;
+  return importances.map(i => ({ ...i, pct: Math.round(i.sens/max*100) }));
+}
+
+function renderImportance() {
+  const imp = computeImportance().sort((a,b) => b.pct - a.pct);
+  const rows = imp.map(i => `
+    <div class="imp-row">
+      <div class="imp-label">${i.label}</div>
+      <div class="imp-bar-wrap"><div class="imp-bar" style="width:${i.pct}%"></div></div>
+      <div class="imp-val">${i.pct}%</div>
+    </div>`).join('');
+  document.getElementById('importanceSection').innerHTML = `
+    <div class="importance-section">
+      <div class="imp-title">Feature Sensitivity</div>${rows}
+    </div>`;
+}
+
+// ─── Counterfactual Generation (Pure JS — No API) ─────────────────────
+function generateCF() {
+  const ds = DATASETS[currentDs];
+  const { positive } = getPrediction();
+  const targetPositive = !positive; // flip the outcome
+
+  cfResults = ds.cfRules.map((rule, i) => {
+    const result = rule.generate(vals, targetPositive);
+    return {
+      id: i + 1,
+      label: rule.label,
+      changes: result.changes,
+      distance: result.distance,
+      insight: result.insight
+    };
+  });
+
+  renderMetrics();
+  renderImportance();
+  renderTabs();
+  showTab(0);
+}
+
+// ─── Render Results ───────────────────────────────────────────────────
+function renderMetrics() {
+  const avg   = (cfResults.reduce((s,c) => s + c.changes.length, 0) / cfResults.length).toFixed(1);
+  const close = cfResults.filter(c => c.distance === 'close').length;
+  const grid  = document.getElementById('metricsGrid');
+  grid.style.display = 'grid';
+  grid.innerHTML = `
+    <div class="metric"><div class="metric-val">${cfResults.length}</div><div class="metric-lbl">CFs Found</div></div>
+    <div class="metric"><div class="metric-val">${avg}</div><div class="metric-lbl">Avg Changes</div></div>
+    <div class="metric"><div class="metric-val">${close}</div><div class="metric-lbl">Close CFs</div></div>`;
+}
+
+function renderTabs() {
+  const tabs = document.getElementById('cfTabs');
+  tabs.style.display = 'flex';
+  tabs.innerHTML = cfResults.map((cf,i) =>
+    `<button class="cf-tab${i===0?' active':''}" onclick="showTab(${i})">CF #${i+1}</button>`
+  ).join('');
+}
+
+function showTab(i) {
+  activeTab = i;
+  document.querySelectorAll('.cf-tab').forEach((t,idx) => t.classList.toggle('active', idx===i));
+  const cf = cfResults[i];
+  const distCls = { close:'dist-close', moderate:'dist-moderate', far:'dist-far' }[cf.distance] || 'dist-moderate';
+  const arrows  = { increase:'↑', decrease:'↓', change:'⇄' };
+  const rows = cf.changes.map(ch => `
+    <div class="cf-row">
+      <span class="cf-feat">${ch.feature}</span>
+      <span class="cf-change">
+        <span class="cf-old">${ch.from}</span>
+        <span class="cf-arrow">${arrows[ch.direction]||'→'}</span>
+        <span class="cf-new">${ch.to}</span>
+      </span>
+    </div>`).join('');
+  document.getElementById('cfContent').innerHTML = `
+    <div class="cf-result-card">
+      <div class="cf-result-header">
+        <span class="cf-result-title">${cf.label}</span>
+        <span class="dist-badge ${distCls}">${cf.distance} distance</span>
+      </div>
+      <div class="cf-result-body">
+        <div class="cf-sub">${cf.changes.length} feature change${cf.changes.length>1?'s':''} required</div>
+        ${rows}
+      </div>
+    </div>
+    <div class="insight">💡 ${cf.insight}</div>`;
+}
+
+function emptyState() {
+  return `<div class="empty"><div class="empty-icon">⇄</div>Adjust features and click "Generate Counterfactuals" to see what minimal changes would flip the model's decision.</div>`;
+}
+
+// ─── Bootstrap ────────────────────────────────────────────────────────
+renderFeatures();
+updatePrediction();
+</script>
+</body>
+</html>
